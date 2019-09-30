@@ -1,0 +1,11 @@
+{
+  "name": "gatsby-remark-custom-classes",
+  "version": "0.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "keywords": [
+    "remark",
+    "custom",
+    "classes"
+  ]
+}
