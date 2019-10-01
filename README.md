@@ -67,7 +67,7 @@ be translated into Remark types. Feel free to try them out to be more specific
 with your classes. For example if you want to target only `h1` and not all
 headings.
 
-[./index.js](./index.js#L3-L20)
+[./src/index.js](./src/index.js#L3-L20)
 
 ### Remark
 
