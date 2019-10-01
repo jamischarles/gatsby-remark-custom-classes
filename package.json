@@ -1,11 +1,23 @@
 {
   "name": "gatsby-remark-custom-classes",
-  "version": "0.1.0",
-  "main": "index.js",
-  "license": "MIT",
+  "version": "0.2.0",
   "keywords": [
-    "remark",
+    "classes",
     "custom",
-    "classes"
-  ]
+    "remark"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muuvmuuv/gatsby-remark-custom-classes"
+  },
+  "license": "MIT",
+  "main": "src/index.js",
+  "scripts": {},
+  "dependencies": {
+    "unist-util-visit": "^2.0.0"
+  },
+  "devDependencies": {},
+  "peerDependencies": {
+    "unist-util-visit": "2.x"
+  }
 }
