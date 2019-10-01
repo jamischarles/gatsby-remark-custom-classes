@@ -1,7 +1,6 @@
-const fs = require('fs')
 const visit = require('unist-util-visit')
 
-const tagTypes = {
+const typesAliasses = {
   heading: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
   paragraph: ['p'],
   image: ['img'],
@@ -20,8 +19,8 @@ const tagTypes = {
   tableRow: ['tr'],
 }
 
-const remarkTypes = {
-  image: {
+const remarkPluginOptions = {
+  images: {
     type: 'html',
     value: 'gatsby-resp-image-figure',
   },
@@ -31,105 +30,111 @@ const remarkTypes = {
   },
 }
 
-function getRandomInt(max) {
-  return Math.floor(Math.random() * Math.floor(max))
+function getTypeByAlias(alias) {
+  return Object.keys(typesAliasses).find(
+    type => typesAliasses[type].indexOf(alias) > -1
+  )
 }
 
-function visitHelperTags(tag) {
-  return Object.keys(tagTypes).find(t => tagTypes[t].indexOf(tag) > -1)
-}
+module.exports = ({ markdownAST }, pluginOptions) => {
+  const rootClasses = pluginOptions.root
+  const tagClasses = pluginOptions.tag
+  const remarkClasses = pluginOptions.remark
 
-module.exports = (component, pluginOptions) => {
-  const { markdownAST } = component
-  const { types, tags, remark } = pluginOptions
-
-  // only loop top level nodes
-  // use `unist-util-visit` to access all nodes of a type
-  const children = markdownAST.children.map(node => {
-    if (types) {
-      const typeNames = Object.keys(types)
-      typeNames.forEach(name => {
-        if (node.type === name) {
-          if (!node.data) node.data = {}
-          node.data.hProperties = { className: types[name] }
-        }
-      })
+  /**
+   * Loop through the top level nodes in
+   * root to prevent duplicated/nested
+   * classes, e.g. for paragraphs.
+   */
+  markdownAST.children.forEach((node, i) => {
+    if (
+      node.type === 'html' ||
+      (node.children && node.children[0].type === 'html')
+    ) {
+      // skip plugin generated and inline HTML
+      return
     }
 
-    if (tags) {
-      const tagNames = Object.keys(tags)
-      tagNames.forEach(name => {
-        const tagType = visitHelperTags(name) // e.g. `heading`
-        console.log(tagType)
-
-        if (node.type === tagType) {
-          if (!node.data) node.data = {}
-          switch (tagType) {
-            case 'heading':
-              const depth = Number(name[1])
-              if (node.depth === depth) {
-                node.data.hProperties = { className: tags[name] }
-              }
-              break
-            case 'thematicBreak':
-              console.log(node)
-              node = {
-                type: 'paragraph',
-                data: {
-                  hName: 'div',
-                  hProperties: { className: tags[name] },
-                },
-                position: node.position,
-                children: node,
-              }
-              delete node.children.position
-
-              break
-
-            default:
-              node.data.hProperties = { className: tags[name] }
-              break
+    /**
+     * Search for definite node root types.
+     */
+    if (rootClasses) {
+      const typeNames = Object.keys(rootClasses)
+      typeNames.forEach(name => {
+        if (node.type === name) {
+          node = {
+            type: 'div',
+            data: {
+              hProperties: {
+                className: rootClasses[name],
+              },
+            },
+            children: [node],
           }
         }
       })
     }
 
-    return node
+    // override linked object node
+    markdownAST.children[i] = node
   })
 
-  const newMAST = {
-    type: 'root',
-    children,
-  }
+  /**
+   * Search for each node types by an alias (tag) globally.
+   */
+  if (tagClasses) {
+    const tags = Object.keys(tagClasses)
+    tags.forEach(name => {
+      const tagType = getTypeByAlias(name) /** @return {string} e.g. heading */
 
-  // search globally in AST
-  if (remark) {
-    const remarkNames = Object.keys(remark)
-    remarkNames.forEach(name => {
-      const remarkNode = remarkTypes[name]
-      visit(newMAST, remarkNode.type, node => {
-        if (node.value.includes(remarkNode.value)) {
-          node.value = `<div class="${remark[name]}">${node.value}</div>`
-        }
-      })
+      switch (tagType) {
+        case 'heading':
+          const depth = Number(name[1]) // get depth from tag name `h1`[1]
+          const isHDepth = node =>
+            node.type === 'heading' && node.depth === depth
+          visit(markdownAST, isHDepth, node => {
+            if (!node.data) node.data = {}
+            node.data.hProperties = { className: tagClasses[name] }
+          })
+          break
+
+        default:
+          visit(markdownAST, tagType, node => {
+            if (!node.data) node.data = {}
+            node.data.hProperties = { className: tagClasses[name] }
+          })
+          break
+      }
     })
   }
 
-  // const id = getRandomInt(99999)
-  // fs.writeFile(
-  //   `./tmp/md-ast-${id}.json`,
-  //   JSON.stringify(markdownAST, null, 2),
-  //   () => {
-  //     console.log('DONE:', id)
-  //   }
-  // )
-  // fs.writeFile(
-  //   `./tmp/md-ast-${id}-new.json`,
-  //   JSON.stringify(newMAST, null, 2),
-  //   () => {
-  //     console.log('NEW:', id)
-  //   }
-  // )
+  /**
+   * Search globally in AST because the most time
+   * those plugin generated stuff is inside a
+   * paragraph node.
+   */
+  if (remarkClasses) {
+    const plgNames = Object.keys(remarkClasses)
+    plgNames.forEach(name => {
+      if (Object.keys(remarkPluginOptions).indexOf(name) > -1) {
+        const { type, value } = remarkPluginOptions[name]
 
-  return newMAST
+        switch (type) {
+          case 'html':
+            visit(markdownAST, 'html', node => {
+              if (node.value.includes(value)) {
+                node.value = `<div class="${remarkClasses[name]}">${node.value}</div>`
+              }
+            })
+            break
+
+          default:
+            // noop
+            break
+        }
+      }
+    })
+  }
+
+  return markdownAST
 }
